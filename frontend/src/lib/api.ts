@@ -1,4 +1,4 @@
-import { getToken } from '@/lib/session';
+import { clearSession, getToken } from '@/lib/session';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
@@ -16,6 +16,21 @@ async function request<T>(
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   const json = await res.json();
 
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    throw new Error(json?.message ?? json?.error ?? 'Error en la solicitud');
+  }
+  return json;
+}
+
+async function requestLocal<T>(path: string): Promise<T> {
+  const res = await fetch(path, { cache: 'no-store' });
+  const json = await res.json();
   if (!res.ok) {
     throw new Error(json?.message ?? json?.error ?? 'Error en la solicitud');
   }
@@ -104,10 +119,10 @@ export const expensesApi = {
 export const searchApi = {
   flights: (params: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString();
-    return request<{ ok: boolean; data: unknown }>(`/search/flights?${qs}`);
+    return requestLocal<{ ok: boolean; data: unknown }>(`/api/search/flights?${qs}`);
   },
   hotels: (params: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString();
-    return request<{ ok: boolean; data: unknown }>(`/search/hotels?${qs}`);
+    return requestLocal<{ ok: boolean; data: unknown }>(`/api/search/hotels?${qs}`);
   },
 };

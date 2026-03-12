@@ -7,10 +7,18 @@ type SearchType = 'flights' | 'hotels';
 interface FlightResult {
   flights?: Array<{
     airline?: string;
+    airline_name?: string;
+    airline_logo?: string;
     departure_airport?: { name?: string; id?: string };
     arrival_airport?: { name?: string; id?: string };
     departure_token?: string;
     price?: number;
+    flights?: Array<{
+      airline?: string;
+      airline_logo?: string;
+      departure_airport?: { name?: string; id?: string };
+      arrival_airport?: { name?: string; id?: string };
+    }>;
   }>;
   best_flights?: FlightResult['flights'];
 }
@@ -38,7 +46,7 @@ export default function SearchPage() {
     arrival_id: '',
     outbound_date: '',
     return_date: '',
-    currency: 'USD',
+    currency: 'MXN',
   });
 
   // Hotel params
@@ -46,7 +54,7 @@ export default function SearchPage() {
     q: '',
     check_in_date: '',
     check_out_date: '',
-    currency: 'USD',
+    currency: 'MXN',
   });
 
   const [results, setResults] = useState<FlightResult | HotelResult | null>(null);
@@ -78,6 +86,27 @@ export default function SearchPage() {
   const hotelData = results as HotelResult | null;
   const displayFlights = flightData?.best_flights ?? flightData?.flights ?? [];
   const displayHotels = hotelData?.properties ?? [];
+
+  const normalizeFlight = (flight: NonNullable<FlightResult['flights']>[number]) => {
+    const segments = Array.isArray(flight.flights) ? flight.flights : [];
+    const firstSegment = segments[0];
+    const lastSegment = segments[segments.length - 1];
+    const airlines = segments
+      .map(segment => segment.airline)
+      .filter((value): value is string => Boolean(value));
+
+    return {
+      fromId: flight.departure_airport?.id ?? firstSegment?.departure_airport?.id ?? '—',
+      toId: flight.arrival_airport?.id ?? lastSegment?.arrival_airport?.id ?? '—',
+      fromName: flight.departure_airport?.name ?? firstSegment?.departure_airport?.name ?? '',
+      toName: flight.arrival_airport?.name ?? lastSegment?.arrival_airport?.name ?? '',
+      airline: flight.airline ?? flight.airline_name ?? airlines.join(' + ') ?? '',
+      airlineLogo: flight.airline_logo ?? firstSegment?.airline_logo,
+    };
+  };
+
+  const formatPriceMXN = (value: number) =>
+    new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(value);
 
   return (
     <div className="max-w-6xl">
@@ -226,24 +255,47 @@ export default function SearchPage() {
               </h2>
               <div className="space-y-3">
                 {displayFlights.map((flight, i) => (
+                  (() => {
+                    const normalized = normalizeFlight(flight);
+                    return (
                   <div key={i} className="card p-4 flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold" style={{ color: '#143b75' }}>
-                        {flight.departure_airport?.id ?? '—'} → {flight.arrival_airport?.id ?? '—'}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>
-                        {flight.departure_airport?.name ?? ''} → {flight.arrival_airport?.name ?? ''}
-                      </p>
-                      {flight.airline && (
-                        <p className="text-xs mt-0.5" style={{ color: '#35537b' }}>{flight.airline}</p>
+                    <div className="flex items-start gap-3 flex-1">
+                      {normalized.airlineLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={normalized.airlineLogo}
+                          alt={normalized.airline || 'Logo aerolínea'}
+                          className="w-8 h-8 rounded-sm border"
+                          style={{ borderColor: '#d8e6fb', background: '#ffffff', objectFit: 'contain' }}
+                        />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-sm border flex items-center justify-center text-xs"
+                          style={{ borderColor: '#d8e6fb', background: '#ffffff', color: '#6282ad' }}
+                        >
+                          ✈
+                        </div>
                       )}
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: '#143b75' }}>
+                          {normalized.fromId} → {normalized.toId}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>
+                          {normalized.fromName} → {normalized.toName}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: '#35537b' }}>
+                          {normalized.airline || 'Aerolínea no especificada'}
+                        </p>
+                      </div>
                     </div>
                     {flight.price !== undefined && (
-                      <p className="text-lg font-bold flex-shrink-0" style={{ color: '#1f5da8' }}>
-                        ${flight.price}
+                      <p className="text-lg font-bold shrink-0" style={{ color: '#1f5da8' }}>
+                        {formatPriceMXN(flight.price)}
                       </p>
                     )}
                   </div>
+                    );
+                  })()
                 ))}
               </div>
             </div>

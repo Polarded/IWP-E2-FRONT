@@ -31,7 +31,7 @@ export default function LoginPage() {
       <div className="window-shell w-full max-w-5xl grid grid-cols-1 md:grid-cols-[1.2fr_1fr]">
         <section className="hidden md:flex flex-col justify-between p-8" style={{ background: 'linear-gradient(165deg, #1f5da8 0%, #2a78ce 100%)' }}>
           <div>
-            <p className="text-xs uppercase tracking-widest" style={{ color: '#d7e8ff' }}>Gestor de Viajes</p>
+            <p className="text-xs uppercase tracking-widest" style={{ color: '#d7e8ff' }}>Hawk Solutions</p>
             <h1 className="text-4xl font-bold mt-3" style={{ color: '#ffffff', lineHeight: 1.1 }}>
               Controla solicitudes, gastos y aprobaciones.
             </h1>
@@ -110,7 +110,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-xs text-center mt-6" style={{ color: '#6282ad' }}>
-            © {new Date().getFullYear()} Gestor de viajes
+            © {new Date().getFullYear()} Hawk Solutions
           </p>
         </section>
       </div>

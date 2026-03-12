@@ -8,17 +8,14 @@ const navItems = {
   USER: [
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/dashboard/trips', label: 'Mis Viajes', icon: '✈️' },
-    { href: '/dashboard/search', label: 'Buscar Vuelos/Hoteles', icon: '🔍' },
   ],
   GESTOR: [
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/dashboard/trips', label: 'Solicitudes', icon: '📋' },
-    { href: '/dashboard/search', label: 'Buscar Vuelos/Hoteles', icon: '🔍' },
   ],
   FINANZAS: [
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/dashboard/trips', label: 'Solicitudes Financieras', icon: '💼' },
-    { href: '/dashboard/search', label: 'Buscar Vuelos/Hoteles', icon: '🔍' },
   ],
 };
 
@@ -60,8 +57,8 @@ export default function Sidebar() {
           </svg>
         </div>
         <div>
-          <p className="font-semibold text-sm" style={{ color: '#ffffff' }}>Gestor de viajes</p>
-          <p className="text-xs" style={{ color: '#d7e8ff' }}>Portal corporativo</p>
+          <p className="font-semibold text-sm" style={{ color: '#ffffff' }}>Hawk Solutions</p>
+          <p className="text-xs" style={{ color: '#d7e8ff' }}>Gestión de viajes corporativos</p>
         </div>
       </div>
 

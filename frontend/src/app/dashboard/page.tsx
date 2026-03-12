@@ -76,9 +76,6 @@ export default function DashboardPage() {
 
           <div className="flex flex-wrap gap-2 mt-5 mb-4">
             <span className="tab-button active">Solicitudes</span>
-            <span className="tab-button">Aceptadas</span>
-            <span className="tab-button">Pendientes</span>
-            <span className="tab-button">Denegadas</span>
           </div>
 
           {loading ? (
@@ -133,9 +130,6 @@ export default function DashboardPage() {
                 )}
                 <Link href="/dashboard/trips" className="btn-outline px-5 py-2.5 text-sm">
                   Ver solicitudes
-                </Link>
-                <Link href="/dashboard/search" className="btn-ghost px-5 py-2.5 text-sm">
-                  Buscar vuelos/hoteles
                 </Link>
               </div>
             </>
