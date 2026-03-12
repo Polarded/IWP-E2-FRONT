@@ -6,7 +6,7 @@ import { useSessionUser } from '@/lib/useSessionUser';
 
 const statusLabel: Record<string, string> = {
   PENDING: 'Pendiente',
-  GESTOR_APPROVED: 'Aprobado por Gestor',
+  GESTOR_APPROVED: 'Pendiente Finanzas',
   GESTOR_REJECTED: 'Rechazado por Gestor',
   FINANCE_APPROVED: 'Aprobado por Finanzas',
   FINANCE_REJECTED: 'Rechazado por Finanzas',

@@ -7,7 +7,7 @@ import { clearTripSelection, getTripSelection, saveTripSelection } from '@/lib/t
 
 const statusLabel: Record<string, string> = {
   PENDING: 'Pendiente',
-  GESTOR_APPROVED: 'Aprobado por Gestor',
+  GESTOR_APPROVED: 'Pendiente Finanzas',
   GESTOR_REJECTED: 'Rechazado por Gestor',
   FINANCE_APPROVED: 'Aprobado por Finanzas',
   FINANCE_REJECTED: 'Rechazado por Finanzas',
@@ -54,6 +54,38 @@ interface SearchResults {
   properties?: HotelOption[];
 }
 
+const IATA_SUGGESTIONS: Array<{ code: string; label: string }> = [
+  { code: 'CUU', label: 'Chihuahua, MX' },
+  { code: 'MTY', label: 'Monterrey, MX' },
+  { code: 'GDL', label: 'Guadalajara, MX' },
+  { code: 'MEX', label: 'Ciudad de Mexico, MX' },
+  { code: 'TIJ', label: 'Tijuana, MX' },
+  { code: 'CUN', label: 'Cancun, MX' },
+  { code: 'PVR', label: 'Puerto Vallarta, MX' },
+  { code: 'BJX', label: 'Leon/Bajio, MX' },
+  { code: 'QRO', label: 'Queretaro, MX' },
+  { code: 'HMO', label: 'Hermosillo, MX' },
+  { code: 'JFK', label: 'New York JFK, US' },
+  { code: 'LAX', label: 'Los Angeles, US' },
+  { code: 'ORD', label: 'Chicago O Hare, US' },
+  { code: 'DFW', label: 'Dallas/Fort Worth, US' },
+  { code: 'ATL', label: 'Atlanta, US' },
+  { code: 'IAH', label: 'Houston, US' },
+  { code: 'MIA', label: 'Miami, US' },
+  { code: 'MAD', label: 'Madrid, ES' },
+  { code: 'CDG', label: 'Paris Charles de Gaulle, FR' },
+  { code: 'LHR', label: 'London Heathrow, UK' },
+  { code: 'FRA', label: 'Frankfurt, DE' },
+  { code: 'AMS', label: 'Amsterdam, NL' },
+  { code: 'NRT', label: 'Tokyo Narita, JP' },
+  { code: 'SFO', label: 'San Francisco, US' },
+  { code: 'YYZ', label: 'Toronto Pearson, CA' },
+  { code: 'BOG', label: 'Bogota, CO' },
+  { code: 'LIM', label: 'Lima, PE' },
+  { code: 'EZE', label: 'Buenos Aires Ezeiza, AR' },
+  { code: 'GRU', label: 'Sao Paulo Guarulhos, BR' },
+];
+
 function StatusModal({
   trip,
   role,
@@ -74,6 +106,7 @@ function StatusModal({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [showSearchPanel, setShowSearchPanel] = useState(() => role === 'GESTOR');
 
   const [flightParams, setFlightParams] = useState({
     departure_id: '',
@@ -99,6 +132,7 @@ function StatusModal({
   const financeActions: { label: string; status: TripStatus; danger?: boolean }[] = [
     { label: 'Aprobar Financieramente', status: 'FINANCE_APPROVED' },
     { label: 'Rechazar Financieramente', status: 'FINANCE_REJECTED', danger: true },
+    { label: 'Solicitar Corrección', status: 'CORRECTION_REQUIRED' },
   ];
 
   const actions = role === 'GESTOR' ? gestorActions : financeActions;
@@ -111,6 +145,14 @@ function StatusModal({
         const current = getTripSelection(trip.id);
         if (!current?.flight || !current?.hotel) {
           setError('Antes de aprobar, selecciona un vuelo y un hospedaje para este viaje.');
+          setLoading(false);
+          return;
+        }
+      }
+      if (role === 'FINANZAS' && status === 'FINANCE_APPROVED') {
+        const current = getTripSelection(trip.id);
+        if (!current?.flight || !current?.hotel) {
+          setError('Antes de aprobar financieramente, verifica o ajusta vuelo y hospedaje.');
           setLoading(false);
           return;
         }
@@ -172,6 +214,21 @@ function StatusModal({
   const formatPriceMXN = (value: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(value);
 
+  const parseCurrencyValue = (raw?: string): number => {
+    if (!raw) return 0;
+    const normalized = raw.replace(/[^\d.,-]/g, '').trim();
+    if (!normalized) return 0;
+    const withDotDecimal = normalized.includes(',') && normalized.includes('.')
+      ? normalized.replace(/,/g, '')
+      : normalized.replace(',', '.');
+    const value = Number(withDotDecimal);
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  const selectedFlightPrice = selection?.flight?.price ?? 0;
+  const selectedHotelPrice = parseCurrencyValue(selection?.hotel?.total_rate);
+  const selectedTotalPrice = selectedFlightPrice + selectedHotelPrice;
+
   return (
     <div className="modal-backdrop">
       <div className="modal-window">
@@ -184,19 +241,39 @@ function StatusModal({
           <h3 className="text-base font-semibold mb-1" style={{ color: '#143b75' }}>Actualizar estado</h3>
           <p className="text-xs mb-4" style={{ color: '#6282ad' }}>Viaje: <strong style={{ color: '#1f5da8' }}>{trip.destination}</strong></p>
 
-          {role === 'GESTOR' && (
+          {(role === 'GESTOR' || role === 'FINANZAS') && (
             <div className="card p-4 mb-4" style={{ background: '#f5f9ff', border: '1px solid #d8e6fb' }}>
               <div className="flex items-center justify-between gap-3 mb-3">
                 <p className="text-sm font-semibold" style={{ color: '#143b75' }}>Vuelos y hospedaje</p>
-                <button
-                  className="btn-ghost px-3 py-1 text-xs"
-                  onClick={() => {
-                    clearTripSelection(trip.id);
-                    setSelection(null);
-                  }}
-                >
-                  Limpiar selección
-                </button>
+                <div className="flex gap-2">
+                  {role === 'FINANZAS' && !showSearchPanel && (
+                    <button
+                      className="btn-outline px-3 py-1 text-xs"
+                      type="button"
+                      onClick={() => {
+                        setShowSearchPanel(true);
+                        setSearchType('flights');
+                        setResults(null);
+                        setSearchError('');
+                      }}
+                    >
+                      Modificar selección
+                    </button>
+                  )}
+                  <button
+                    className="btn-ghost px-3 py-1 text-xs"
+                    onClick={() => {
+                      clearTripSelection(trip.id);
+                      setSelection(null);
+                      setShowSearchPanel(true);
+                      setSearchType('flights');
+                      setResults(null);
+                      setSearchError('');
+                    }}
+                  >
+                    Limpiar selección
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
@@ -224,20 +301,34 @@ function StatusModal({
                 </div>
               </div>
 
-              <div className="flex gap-2 mb-3">
-                {(['flights', 'hotels'] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => { setSearchType(t); setResults(null); setSearchError(''); }}
-                    className={`tab-button ${searchType === t ? 'active' : ''}`}
-                    type="button"
-                  >
-                    {t === 'flights' ? 'Vuelos' : 'Hoteles'}
-                  </button>
-                ))}
-              </div>
+              {role === 'FINANZAS' && (
+                <div className="p-3 rounded-md mb-4" style={{ background: '#ffffff', border: '1px solid #d8e6fb' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#35537b' }}>Total estimado (vuelo + hotel)</p>
+                  <p className="text-lg font-bold mt-1" style={{ color: '#1f5da8' }}>
+                    {formatPriceMXN(selectedTotalPrice)}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: '#6282ad' }}>
+                    Vuelo: {formatPriceMXN(selectedFlightPrice)} · Hotel: {formatPriceMXN(selectedHotelPrice)}
+                  </p>
+                </div>
+              )}
 
-              <form onSubmit={handleSearch} className="space-y-3">
+              {showSearchPanel ? (
+                <>
+                  <div className="flex gap-2 mb-3">
+                    {(['flights', 'hotels'] as const).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => { setSearchType(t); setResults(null); setSearchError(''); }}
+                        className={`tab-button ${searchType === t ? 'active' : ''}`}
+                        type="button"
+                      >
+                        {t === 'flights' ? 'Vuelos' : 'Hoteles'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleSearch} className="space-y-3">
                 {searchType === 'flights' ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -256,11 +347,11 @@ function StatusModal({
                           list="iata-suggest"
                         />
                         <datalist id="iata-suggest">
-                          <option value="MEX" />
-                          <option value="GDL" />
-                          <option value="MTY" />
-                          <option value="JFK" />
-                          <option value="LAX" />
+                          {IATA_SUGGESTIONS.map(airport => (
+                            <option key={airport.code} value={airport.code}>
+                              {airport.label} ({airport.code})
+                            </option>
+                          ))}
                         </datalist>
                         <p className="text-xs mt-1" style={{ color: '#6282ad' }}>Tip: escribe 3 letras (ej. MEX, JFK).</p>
                       </div>
@@ -359,23 +450,23 @@ function StatusModal({
                   </>
                 )}
 
-                <button type="submit" disabled={searchLoading} className="btn-gold px-5 py-2 text-sm">
-                  {searchLoading ? 'Buscando...' : 'Buscar opciones'}
-                </button>
-              </form>
+                    <button type="submit" disabled={searchLoading} className="btn-gold px-5 py-2 text-sm">
+                      {searchLoading ? 'Buscando...' : 'Buscar opciones'}
+                    </button>
+                  </form>
 
-              {searchError && (
-                <div className="text-sm mt-3 px-3 py-2 rounded-lg" style={{ background: '#ffeef0', color: '#c9284b', border: '1px solid #f1bdc7' }}>
-                  {searchError}
-                </div>
-              )}
+                  {searchError && (
+                    <div className="text-sm mt-3 px-3 py-2 rounded-lg" style={{ background: '#ffeef0', color: '#c9284b', border: '1px solid #f1bdc7' }}>
+                      {searchError}
+                    </div>
+                  )}
 
-              {searchType === 'flights' && Array.isArray(displayFlights) && displayFlights.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {displayFlights.slice(0, 8).map((flight, i: number) => (
-                    (() => {
-                      const normalized = normalizeFlight(flight);
-                      return (
+                  {searchType === 'flights' && Array.isArray(displayFlights) && displayFlights.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {displayFlights.slice(0, 8).map((flight, i: number) => (
+                        (() => {
+                          const normalized = normalizeFlight(flight);
+                          return (
                     <div key={i} className="card p-3 flex items-center justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1">
                         {normalized.airlineLogo ? (
@@ -424,23 +515,25 @@ function StatusModal({
                               },
                             });
                             setSelection(next);
-                            onClose();
+                            setSearchType('hotels');
+                            setResults(null);
+                            setSearchError('');
                           }}
                         >
                           Seleccionar
                         </button>
                       </div>
                     </div>
-                      );
-                    })()
-                  ))}
-                </div>
-              )}
+                          );
+                        })()
+                      ))}
+                    </div>
+                  )}
 
-              {searchType === 'hotels' && Array.isArray(displayHotels) && displayHotels.length > 0 && (
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {displayHotels.slice(0, 8).map((hotel, i: number) => (
-                    <div key={i} className="card p-3">
+                  {searchType === 'hotels' && Array.isArray(displayHotels) && displayHotels.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {displayHotels.slice(0, 8).map((hotel, i: number) => (
+                        <div key={i} className="card p-3">
                       <p className="text-sm font-semibold" style={{ color: '#143b75' }}>{hotel.name ?? 'Hotel'}</p>
                       <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>{hotel.type ?? ''}</p>
                       {hotel.overall_rating !== undefined && (
@@ -468,13 +561,22 @@ function StatusModal({
                             },
                           });
                           setSelection(next);
-                          onClose();
+                          setSearchType('flights');
+                          setResults(null);
+                          setSearchError('');
+                          setShowSearchPanel(false);
                         }}
                       >
                         Seleccionar hospedaje
                       </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                </>
+              ) : (
+                <div className="mt-1 mb-1 text-xs" style={{ color: '#6282ad' }}>
+                  Selección completada. Ahora puedes aprobar, rechazar o solicitar corrección.
                 </div>
               )}
             </div>
@@ -545,10 +647,26 @@ export default function TripsPage() {
   }, []);
 
   const canApprove = role === 'GESTOR' || role === 'FINANZAS';
+  const pendingByRole: Record<string, TripStatus[]> = {
+    USER: ['PENDING', 'GESTOR_APPROVED', 'CORRECTION_REQUIRED'],
+    GESTOR: ['PENDING', 'CORRECTION_REQUIRED'],
+    FINANZAS: ['GESTOR_APPROVED', 'CORRECTION_REQUIRED'],
+  };
+  const acceptedByRole: Record<string, TripStatus[]> = {
+    USER: ['FINANCE_APPROVED'],
+    GESTOR: ['FINANCE_APPROVED'],
+    FINANZAS: ['FINANCE_APPROVED'],
+  };
+  const rejectedByRole: Record<string, TripStatus[]> = {
+    USER: ['GESTOR_REJECTED', 'FINANCE_REJECTED'],
+    GESTOR: ['GESTOR_REJECTED', 'FINANCE_REJECTED'],
+    FINANZAS: ['GESTOR_REJECTED', 'FINANCE_REJECTED'],
+  };
+
   const filteredTrips = trips.filter(t => {
-    if (filter === 'PENDING') return t.status === 'PENDING' || t.status === 'CORRECTION_REQUIRED';
-    if (filter === 'ACCEPTED') return t.status.includes('APPROVED');
-    return t.status.includes('REJECTED');
+    if (filter === 'PENDING') return (pendingByRole[role] ?? pendingByRole.USER).includes(t.status);
+    if (filter === 'ACCEPTED') return (acceptedByRole[role] ?? acceptedByRole.USER).includes(t.status);
+    return (rejectedByRole[role] ?? rejectedByRole.USER).includes(t.status);
   });
 
   return (

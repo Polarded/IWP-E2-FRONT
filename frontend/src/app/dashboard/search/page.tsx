@@ -37,6 +37,38 @@ interface HotelResult {
   }>;
 }
 
+const IATA_SUGGESTIONS: Array<{ code: string; label: string }> = [
+  { code: 'CUU', label: 'Chihuahua, MX' },
+  { code: 'MTY', label: 'Monterrey, MX' },
+  { code: 'GDL', label: 'Guadalajara, MX' },
+  { code: 'MEX', label: 'Ciudad de Mexico, MX' },
+  { code: 'TIJ', label: 'Tijuana, MX' },
+  { code: 'CUN', label: 'Cancun, MX' },
+  { code: 'PVR', label: 'Puerto Vallarta, MX' },
+  { code: 'BJX', label: 'Leon/Bajio, MX' },
+  { code: 'QRO', label: 'Queretaro, MX' },
+  { code: 'HMO', label: 'Hermosillo, MX' },
+  { code: 'JFK', label: 'New York JFK, US' },
+  { code: 'LAX', label: 'Los Angeles, US' },
+  { code: 'ORD', label: 'Chicago O Hare, US' },
+  { code: 'DFW', label: 'Dallas/Fort Worth, US' },
+  { code: 'ATL', label: 'Atlanta, US' },
+  { code: 'IAH', label: 'Houston, US' },
+  { code: 'MIA', label: 'Miami, US' },
+  { code: 'MAD', label: 'Madrid, ES' },
+  { code: 'CDG', label: 'Paris Charles de Gaulle, FR' },
+  { code: 'LHR', label: 'London Heathrow, UK' },
+  { code: 'FRA', label: 'Frankfurt, DE' },
+  { code: 'AMS', label: 'Amsterdam, NL' },
+  { code: 'NRT', label: 'Tokyo Narita, JP' },
+  { code: 'SFO', label: 'San Francisco, US' },
+  { code: 'YYZ', label: 'Toronto Pearson, CA' },
+  { code: 'BOG', label: 'Bogota, CO' },
+  { code: 'LIM', label: 'Lima, PE' },
+  { code: 'EZE', label: 'Buenos Aires Ezeiza, AR' },
+  { code: 'GRU', label: 'Sao Paulo Guarulhos, BR' },
+];
+
 export default function SearchPage() {
   const [type, setType] = useState<SearchType>('flights');
 
@@ -147,6 +179,7 @@ export default function SearchPage() {
                         required
                         maxLength={3}
                         className="input-field"
+                        list="iata-suggest-search"
                       />
                     </div>
                     <div>
@@ -161,9 +194,18 @@ export default function SearchPage() {
                         required
                         maxLength={3}
                         className="input-field"
+                        list="iata-suggest-search"
                       />
                     </div>
                   </div>
+
+                  <datalist id="iata-suggest-search">
+                    {IATA_SUGGESTIONS.map(airport => (
+                      <option key={airport.code} value={airport.code}>
+                        {airport.label} ({airport.code})
+                      </option>
+                    ))}
+                  </datalist>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
