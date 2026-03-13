@@ -512,7 +512,21 @@ function StatusModal({
                             className="w-8 h-8 rounded-sm border flex items-center justify-center text-xs"
                             style={{ borderColor: '#d8e6fb', background: '#ffffff', color: '#6282ad' }}
                           >
-                            ✈
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
+                            >
+                              <path d="M3 12h18" />
+                              <path d="M6 15h12" />
+                              <path d="m9 12 3-7 3 7" />
+                            </svg>
                           </div>
                         )}
                         <div>
@@ -704,7 +718,7 @@ export default function TripsPage() {
       <div className="window-shell">
         <div className="window-header">
           <p className="text-xs font-semibold" style={{ color: '#35537b' }}>SOLICITUDES DE VIAJE</p>
-          <div className="flex gap-2">
+          <div className="tab-scroll-row">
             <button type="button" onClick={() => setFilter('PENDING')} className={`tab-button ${filter === 'PENDING' ? 'active' : ''}`}>
               Pendientes
             </button>
@@ -740,7 +754,23 @@ export default function TripsPage() {
             <div className="text-sm" style={{ color: '#c9284b' }}>{error}</div>
           ) : filteredTrips.length === 0 ? (
             <div className="card p-12 text-center">
-              <p className="text-2xl mb-3">✈️</p>
+              <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-md" style={{ border: '1px solid #d8e6fb', background: '#f5f9ff', color: '#35537b' }}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 12h18" />
+                  <path d="M6 15h12" />
+                  <path d="m9 12 3-7 3 7" />
+                </svg>
+              </div>
               <p className="text-sm" style={{ color: '#6282ad' }}>No hay solicitudes para este filtro.</p>
               {role === 'USER' && (
                 <Link href="/dashboard/trips/new" className="btn-gold mt-4 inline-block px-5 py-2.5 text-sm">

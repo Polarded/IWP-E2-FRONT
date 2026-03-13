@@ -6,16 +6,16 @@ import { useSessionUser } from '@/lib/useSessionUser';
 
 const navItems = {
   USER: [
-    { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
-    { href: '/dashboard/trips', label: 'Mis Viajes', icon: '✈️' },
+    { href: '/dashboard', label: 'Dashboard', icon: 'home' },
+    { href: '/dashboard/trips', label: 'Mis Viajes', icon: 'trips' },
   ],
   GESTOR: [
-    { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
-    { href: '/dashboard/trips', label: 'Solicitudes', icon: '📋' },
+    { href: '/dashboard', label: 'Dashboard', icon: 'home' },
+    { href: '/dashboard/trips', label: 'Solicitudes', icon: 'clipboard' },
   ],
   FINANZAS: [
-    { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
-    { href: '/dashboard/trips', label: 'Solicitudes Financieras', icon: '💼' },
+    { href: '/dashboard', label: 'Dashboard', icon: 'home' },
+    { href: '/dashboard/trips', label: 'Solicitudes Financieras', icon: 'briefcase' },
   ],
 };
 
@@ -24,6 +24,65 @@ const roleLabel: Record<string, string> = {
   GESTOR: 'Gestor de Viajes',
   FINANZAS: 'Finanzas',
 };
+
+function renderNavIcon(icon: string) {
+  const baseProps = {
+    width: 16,
+    height: 16,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.9,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  if (icon === 'home') {
+    return (
+      <svg {...baseProps}>
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 9.5V20h14V9.5" />
+      </svg>
+    );
+  }
+
+  if (icon === 'trips') {
+    return (
+      <svg {...baseProps}>
+        <path d="M3 12h18" />
+        <path d="M6 15h12" />
+        <path d="m9 12 3-7 3 7" />
+      </svg>
+    );
+  }
+
+  if (icon === 'clipboard') {
+    return (
+      <svg {...baseProps}>
+        <rect x="6" y="4" width="12" height="16" rx="2" />
+        <path d="M9 4.5h6" />
+        <path d="M9 10h6M9 14h6" />
+      </svg>
+    );
+  }
+
+  if (icon === 'briefcase') {
+    return (
+      <svg {...baseProps}>
+        <rect x="3" y="7" width="18" height="12" rx="2" />
+        <path d="M9 7V5h6v2" />
+        <path d="M3 12h18" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...baseProps}>
+      <path d="M7 7l10 10M17 7 7 17" />
+    </svg>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -84,7 +143,9 @@ export default function Sidebar() {
             href={item.href}
             className={`nav-link ${pathname === item.href ? 'active' : ''}`}
           >
-            <span className="text-base">{item.icon}</span>
+            <span className="inline-flex items-center justify-center" style={{ width: 18, height: 18 }}>
+              {renderNavIcon(item.icon)}
+            </span>
             <span>{item.label}</span>
           </Link>
         ))}
@@ -92,7 +153,23 @@ export default function Sidebar() {
 
       <div className="px-3 pb-5" style={{ borderTop: '1px solid rgba(255,255,255,0.16)', paddingTop: '1rem' }}>
         <button onClick={handleLogout} className="nav-link w-full text-left">
-          <span>🚪</span>
+          <span className="inline-flex items-center justify-center" style={{ width: 18, height: 18 }}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <path d="M10 17l5-5-5-5" />
+              <path d="M15 12H3" />
+            </svg>
+          </span>
           <span>Cerrar sesión</span>
         </button>
       </div>

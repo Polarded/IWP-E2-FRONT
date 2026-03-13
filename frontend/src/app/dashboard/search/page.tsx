@@ -315,7 +315,21 @@ export default function SearchPage() {
                           className="w-8 h-8 rounded-sm border flex items-center justify-center text-xs"
                           style={{ borderColor: '#d8e6fb', background: '#ffffff', color: '#6282ad' }}
                         >
-                          ✈
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M3 12h18" />
+                            <path d="M6 15h12" />
+                            <path d="m9 12 3-7 3 7" />
+                          </svg>
                         </div>
                       )}
                       <div>
@@ -376,7 +390,22 @@ export default function SearchPage() {
 
           {results !== null && displayFlights.length === 0 && displayHotels.length === 0 && (
             <div className="card p-10 text-center">
-              <p className="text-2xl mb-2">🔎</p>
+              <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-md" style={{ border: '1px solid #d8e6fb', background: '#f5f9ff', color: '#35537b' }}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="m20 20-3.2-3.2" />
+                </svg>
+              </div>
               <p className="text-sm" style={{ color: '#6282ad' }}>No se encontraron resultados para tu búsqueda.</p>
             </div>
           )}

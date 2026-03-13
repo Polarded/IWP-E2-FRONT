@@ -176,7 +176,22 @@ export default function ExpensesPage() {
 
               {expenses.length === 0 ? (
                 <div className="card p-10 text-center">
-                  <p className="text-2xl mb-2">🧾</p>
+                  <div className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-md" style={{ border: '1px solid #d8e6fb', background: '#f5f9ff', color: '#35537b' }}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M7 3h10v18l-2-1.2L13 21l-2-1.2L9 21l-2-1.2L5 21V5a2 2 0 0 1 2-2z" />
+                      <path d="M9 8h6M9 12h6" />
+                    </svg>
+                  </div>
                   <p className="text-sm" style={{ color: '#6282ad' }}>No hay gastos registrados para este viaje.</p>
                 </div>
               ) : (

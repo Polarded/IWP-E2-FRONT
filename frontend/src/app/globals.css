@@ -275,6 +275,35 @@ body {
   border-color: #7ea7dd;
 }
 
+.tab-scroll-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: #9dbbe6 #e9f2ff;
+}
+
+.tab-scroll-row .tab-button {
+  flex: 0 0 auto;
+}
+
+.tab-scroll-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tab-scroll-row::-webkit-scrollbar-track {
+  background: #e9f2ff;
+  border-radius: 999px;
+}
+
+.tab-scroll-row::-webkit-scrollbar-thumb {
+  background: #9dbbe6;
+  border-radius: 999px;
+}
+
 .status-chip {
   display: inline-block;
   font-size: 0.72rem;
@@ -321,5 +350,17 @@ body {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .window-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 0.5rem;
+  }
+
+  .metric-value {
+    font-size: 1.95rem;
   }
 }
