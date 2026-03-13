@@ -180,7 +180,7 @@ function StatusModal({
         searchType === 'flights'
           ? await searchApi.flights(params as Record<string, string>)
           : await searchApi.hotels(params as Record<string, string>);
-      setResults(res.data);
+      setResults((res.data ?? null) as SearchResults | null);
     } catch (e: unknown) {
       setSearchError(e instanceof Error ? e.message : 'Error al buscar');
     } finally {
@@ -218,10 +218,40 @@ function StatusModal({
     if (!raw) return 0;
     const normalized = raw.replace(/[^\d.,-]/g, '').trim();
     if (!normalized) return 0;
-    const withDotDecimal = normalized.includes(',') && normalized.includes('.')
-      ? normalized.replace(/,/g, '')
-      : normalized.replace(',', '.');
-    const value = Number(withDotDecimal);
+
+    const commaCount = (normalized.match(/,/g) ?? []).length;
+    const dotCount = (normalized.match(/\./g) ?? []).length;
+
+    let canonical = normalized;
+
+    // When both separators exist, assume the last one is decimal separator.
+    if (commaCount > 0 && dotCount > 0) {
+      const lastComma = normalized.lastIndexOf(',');
+      const lastDot = normalized.lastIndexOf('.');
+      if (lastComma > lastDot) {
+        canonical = normalized.replace(/\./g, '').replace(',', '.');
+      } else {
+        canonical = normalized.replace(/,/g, '');
+      }
+    } else if (commaCount > 0) {
+      const parts = normalized.split(',');
+      const lastPart = parts[parts.length - 1] ?? '';
+      // e.g. 1,171 or 12,345,678 => thousands separators
+      if (commaCount > 1 || lastPart.length === 3) {
+        canonical = normalized.replace(/,/g, '');
+      } else {
+        canonical = normalized.replace(',', '.');
+      }
+    } else if (dotCount > 0) {
+      const parts = normalized.split('.');
+      const lastPart = parts[parts.length - 1] ?? '';
+      // e.g. 1.171 or 12.345.678 => thousands separators
+      if (dotCount > 1 || lastPart.length === 3) {
+        canonical = normalized.replace(/\./g, '');
+      }
+    }
+
+    const value = Number(canonical);
     return Number.isFinite(value) ? value : 0;
   };
 

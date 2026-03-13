@@ -14,7 +14,15 @@ async function request<T>(
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-  const json = await res.json();
+  const raw = await res.text();
+  let json: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      json = { error: raw.slice(0, 240) };
+    }
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -23,18 +31,36 @@ async function request<T>(
         window.location.href = '/login';
       }
     }
-    throw new Error(json?.message ?? json?.error ?? 'Error en la solicitud');
+    const message = typeof json?.message === 'string'
+      ? json.message
+      : typeof json?.error === 'string'
+        ? json.error
+        : 'Error en la solicitud';
+    throw new Error(message);
   }
-  return json;
+  return json as T;
 }
 
 async function requestLocal<T>(path: string): Promise<T> {
   const res = await fetch(path, { cache: 'no-store' });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json?.message ?? json?.error ?? 'Error en la solicitud');
+  const raw = await res.text();
+  let json: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      json = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      throw new Error('La respuesta del servidor no está en formato JSON. Revisa que el endpoint esté activo y que SERPAPI_KEY sea válida.');
+    }
   }
-  return json;
+  if (!res.ok) {
+    const message = typeof json?.message === 'string'
+      ? json.message
+      : typeof json?.error === 'string'
+        ? json.error
+        : 'Error en la solicitud';
+    throw new Error(message);
+  }
+  return json as T;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
