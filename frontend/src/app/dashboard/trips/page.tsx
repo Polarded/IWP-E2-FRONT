@@ -54,11 +54,50 @@ interface SearchResults {
   properties?: HotelOption[];
 }
 
+interface HotelAgreement {
+  code: string;
+  name: string;
+  discountPct: number;
+  matchers: string[];
+}
+
+const HOTEL_AGREEMENTS: HotelAgreement[] = [
+  {
+    code: 'HV-MARRIOTT-2026',
+    name: 'Convenio Marriott Corporativo',
+    discountPct: 12,
+    matchers: ['marriott', 'courtyard', 'fairfield']
+  },
+  {
+    code: 'HV-HILTON-2026',
+    name: 'Convenio Hilton Negocios',
+    discountPct: 10,
+    matchers: ['hilton', 'hampton', 'doubletree']
+  },
+  {
+    code: 'HV-HYATT-2026',
+    name: 'Convenio Hyatt Empresa',
+    discountPct: 9,
+    matchers: ['hyatt', 'grand hyatt', 'hyatt regency']
+  },
+];
+
+const resolveHotelAgreement = (hotelName?: string): HotelAgreement | null => {
+  if (!hotelName) return null;
+  const normalized = hotelName.toLowerCase();
+  return HOTEL_AGREEMENTS.find(agreement =>
+    agreement.matchers.some(matcher => normalized.includes(matcher))
+  ) ?? null;
+};
+
 const IATA_SUGGESTIONS: Array<{ code: string; label: string }> = [
+  { code: 'CDMX', label: 'Ciudad de Mexico (multi-aeropuerto: MEX, NLU, TLC)' },
   { code: 'CUU', label: 'Chihuahua, MX' },
   { code: 'MTY', label: 'Monterrey, MX' },
   { code: 'GDL', label: 'Guadalajara, MX' },
   { code: 'MEX', label: 'Ciudad de Mexico, MX' },
+  { code: 'NLU', label: 'Felipe Angeles (AIFA), MX' },
+  { code: 'TLC', label: 'Toluca, MX' },
   { code: 'TIJ', label: 'Tijuana, MX' },
   { code: 'CUN', label: 'Cancun, MX' },
   { code: 'PVR', label: 'Puerto Vallarta, MX' },
@@ -257,7 +296,9 @@ function StatusModal({
 
   const selectedFlightPrice = selection?.flight?.price ?? 0;
   const selectedHotelPrice = parseCurrencyValue(selection?.hotel?.total_rate);
-  const selectedTotalPrice = selectedFlightPrice + selectedHotelPrice;
+  const selectedHotelDiscount = selection?.hotel?.agreementDiscountPct ?? 0;
+  const selectedHotelNetPrice = selectedHotelPrice * (1 - selectedHotelDiscount / 100);
+  const selectedTotalPrice = selectedFlightPrice + selectedHotelNetPrice;
 
   return (
     <div className="modal-backdrop">
@@ -324,6 +365,7 @@ function StatusModal({
                     <p className="text-sm mt-1" style={{ color: '#143b75' }}>
                       {selection.hotel.name ?? 'Hotel'}
                       {selection.hotel.total_rate ? ` · ${selection.hotel.total_rate}` : ''}
+                      {selection.hotel.hasAgreement ? ` · Convenio ${selection.hotel.agreementDiscountPct ?? 0}%` : ''}
                     </p>
                   ) : (
                     <p className="text-xs mt-1" style={{ color: '#6282ad' }}>Aún no has seleccionado un hospedaje.</p>
@@ -338,8 +380,13 @@ function StatusModal({
                     {formatPriceMXN(selectedTotalPrice)}
                   </p>
                   <p className="text-xs mt-1" style={{ color: '#6282ad' }}>
-                    Vuelo: {formatPriceMXN(selectedFlightPrice)} · Hotel: {formatPriceMXN(selectedHotelPrice)}
+                    Vuelo: {formatPriceMXN(selectedFlightPrice)} · Hotel neto: {formatPriceMXN(selectedHotelNetPrice)}
                   </p>
+                  {selection?.hotel?.hasAgreement && (
+                    <p className="text-xs mt-1" style={{ color: '#2a78ce' }}>
+                      {selection.hotel.agreementName} ({selection.hotel.agreementCode})
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -370,9 +417,9 @@ function StatusModal({
                           type="text"
                           value={flightParams.departure_id}
                           onChange={e => setFlightParams(p => ({ ...p, departure_id: e.target.value.toUpperCase() }))}
-                          placeholder="MEX"
+                          placeholder="MEX o CDMX"
                           required
-                          maxLength={3}
+                          maxLength={40}
                           className="input-field"
                           list="iata-suggest"
                         />
@@ -383,7 +430,9 @@ function StatusModal({
                             </option>
                           ))}
                         </datalist>
-                        <p className="text-xs mt-1" style={{ color: '#6282ad' }}>Tip: escribe 3 letras (ej. MEX, JFK).</p>
+                        <p className="text-xs mt-1" style={{ color: '#6282ad' }}>
+                          Tip: puedes usar IATA (MEX) o alias de ciudad (CDMX). También permite lista: MEX,NLU.
+                        </p>
                       </div>
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#35537b' }}>
@@ -393,9 +442,9 @@ function StatusModal({
                           type="text"
                           value={flightParams.arrival_id}
                           onChange={e => setFlightParams(p => ({ ...p, arrival_id: e.target.value.toUpperCase() }))}
-                          placeholder="JFK"
+                          placeholder="JFK o NYC"
                           required
-                          maxLength={3}
+                          maxLength={40}
                           className="input-field"
                           list="iata-suggest"
                         />
@@ -577,9 +626,17 @@ function StatusModal({
                   {searchType === 'hotels' && Array.isArray(displayHotels) && displayHotels.length > 0 && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                       {displayHotels.slice(0, 8).map((hotel, i: number) => (
+                        (() => {
+                          const agreement = resolveHotelAgreement(hotel.name);
+                          return (
                         <div key={i} className="card p-3">
                       <p className="text-sm font-semibold" style={{ color: '#143b75' }}>{hotel.name ?? 'Hotel'}</p>
                       <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>{hotel.type ?? ''}</p>
+                      {agreement && (
+                        <p className="text-xs mt-1" style={{ color: '#2a78ce' }}>
+                          {agreement.name} · {agreement.discountPct}% descuento
+                        </p>
+                      )}
                       {hotel.overall_rating !== undefined && (
                         <p className="text-xs mt-1" style={{ color: '#35537b' }}>
                           Rating {hotel.overall_rating} {hotel.reviews !== undefined ? `· ${hotel.reviews} reseñas` : ''}
@@ -602,6 +659,10 @@ function StatusModal({
                               rate_per_night: hotel.rate_per_night?.lowest,
                               overall_rating: hotel.overall_rating,
                               reviews: hotel.reviews,
+                              hasAgreement: Boolean(agreement),
+                              agreementName: agreement?.name,
+                              agreementCode: agreement?.code,
+                              agreementDiscountPct: agreement?.discountPct,
                             },
                           });
                           setSelection(next);
@@ -614,6 +675,8 @@ function StatusModal({
                         Seleccionar hospedaje
                       </button>
                         </div>
+                          );
+                        })()
                       ))}
                     </div>
                   )}

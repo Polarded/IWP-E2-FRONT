@@ -13,6 +13,10 @@ export interface SelectedHotel {
   rate_per_night?: string;
   overall_rating?: number;
   reviews?: number;
+  hasAgreement?: boolean;
+  agreementName?: string;
+  agreementCode?: string;
+  agreementDiscountPct?: number;
 }
 
 export interface TripSelection {

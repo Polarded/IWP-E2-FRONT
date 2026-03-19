@@ -4,6 +4,45 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { expensesApi, tripsApi, type Expense, type Trip } from '@/lib/api';
 import { useSessionUser } from '@/lib/useSessionUser';
+import { getTripSelection } from '@/lib/tripSelection';
+
+const parseCurrencyValue = (raw?: string): number => {
+  if (!raw) return 0;
+  const normalized = raw.replace(/[^\d.,-]/g, '').trim();
+  if (!normalized) return 0;
+
+  const commaCount = (normalized.match(/,/g) ?? []).length;
+  const dotCount = (normalized.match(/\./g) ?? []).length;
+
+  let canonical = normalized;
+
+  if (commaCount > 0 && dotCount > 0) {
+    const lastComma = normalized.lastIndexOf(',');
+    const lastDot = normalized.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      canonical = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      canonical = normalized.replace(/,/g, '');
+    }
+  } else if (commaCount > 0) {
+    const parts = normalized.split(',');
+    const lastPart = parts[parts.length - 1] ?? '';
+    if (commaCount > 1 || lastPart.length === 3) {
+      canonical = normalized.replace(/,/g, '');
+    } else {
+      canonical = normalized.replace(',', '.');
+    }
+  } else if (dotCount > 0) {
+    const parts = normalized.split('.');
+    const lastPart = parts[parts.length - 1] ?? '';
+    if (dotCount > 1 || lastPart.length === 3) {
+      canonical = normalized.replace(/\./g, '');
+    }
+  }
+
+  const value = Number(canonical);
+  return Number.isFinite(value) ? value : 0;
+};
 
 export default function ExpensesPage() {
   const params = useParams();
@@ -69,6 +108,12 @@ export default function ExpensesPage() {
   };
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const selection = getTripSelection(tripId);
+  const flightCost = selection?.flight?.price ?? 0;
+  const hotelGrossCost = parseCurrencyValue(selection?.hotel?.total_rate);
+  const hotelDiscount = selection?.hotel?.agreementDiscountPct ?? 0;
+  const hotelNetCost = hotelGrossCost * (1 - hotelDiscount / 100);
+  const travelTotal = flightCost + hotelNetCost + total;
   const canAddExpense = role === 'USER' || role === 'GESTOR';
 
   return (
@@ -79,7 +124,7 @@ export default function ExpensesPage() {
             ← Volver a solicitudes
           </Link>
           <p className="text-xs font-semibold" style={{ color: '#35537b' }}>VER GASTOS DE VIAJE</p>
-          <span className="status-chip ok">Total ${total.toFixed(2)}</span>
+          <span className="status-chip ok">Total viaje ${travelTotal.toFixed(2)}</span>
         </div>
 
         <div className="p-5 sm:p-6">
@@ -96,21 +141,37 @@ export default function ExpensesPage() {
             <div className="text-sm mt-6" style={{ color: '#c9284b' }}>{error}</div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 mb-6">
                 <div className="card p-4">
-                  <p className="section-title">Total de gastos</p>
+                  <p className="section-title">Vuelo</p>
+                  <p className="metric-value mt-2">${flightCost.toFixed(2)}</p>
+                </div>
+                <div className="card p-4">
+                  <p className="section-title">Hotel (neto)</p>
+                  <p className="metric-value mt-2">${hotelNetCost.toFixed(2)}</p>
+                  {selection?.hotel?.hasAgreement && (
+                    <p className="text-xs mt-2" style={{ color: '#2a78ce' }}>
+                      Convenio: {selection.hotel.agreementDiscountPct ?? 0}%
+                    </p>
+                  )}
+                </div>
+                <div className="card p-4">
+                  <p className="section-title">Gastos adicionales</p>
                   <p className="metric-value mt-2">${total.toFixed(2)}</p>
                 </div>
                 <div className="card p-4">
-                  <p className="section-title">Registros</p>
-                  <p className="metric-value mt-2">{expenses.length}</p>
+                  <p className="section-title">Total viaje</p>
+                  <p className="metric-value mt-2">${travelTotal.toFixed(2)}</p>
                 </div>
-                <div className="card p-4">
-                  <p className="section-title">Promedio</p>
-                  <p className="metric-value mt-2">
-                    ${expenses.length ? (total / expenses.length).toFixed(2) : '0.00'}
-                  </p>
-                </div>
+              </div>
+
+              <div className="card p-4 mb-6" style={{ background: '#f5f9ff', border: '1px solid #d8e6fb' }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#35537b' }}>
+                  Formula financiera
+                </p>
+                <p className="text-sm mt-1" style={{ color: '#143b75' }}>
+                  Vuelo (${flightCost.toFixed(2)}) + Hotel (${hotelNetCost.toFixed(2)}) + Gastos (${total.toFixed(2)}) = <strong>${travelTotal.toFixed(2)}</strong>
+                </p>
               </div>
 
               {canAddExpense && (
@@ -217,7 +278,7 @@ export default function ExpensesPage() {
                     </tbody>
                     <tfoot>
                       <tr style={{ borderTop: '1px solid #c8daf6', background: '#f5f9ff' }}>
-                        <td className="px-4 py-3 font-semibold text-xs uppercase" style={{ color: '#35537b' }}>Total</td>
+                        <td className="px-4 py-3 font-semibold text-xs uppercase" style={{ color: '#35537b' }}>Gastos adicionales</td>
                         <td className="px-4 py-3 font-bold" style={{ color: '#1f5da8' }}>${total.toFixed(2)}</td>
                         <td />
                       </tr>

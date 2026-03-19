@@ -16,6 +16,7 @@ const navItems = {
   FINANZAS: [
     { href: '/dashboard', label: 'Dashboard', icon: 'home' },
     { href: '/dashboard/trips', label: 'Solicitudes Financieras', icon: 'briefcase' },
+    { href: '/dashboard/finanzas', label: 'Reporte Mensual', icon: 'chart' },
   ],
 };
 
@@ -73,6 +74,17 @@ function renderNavIcon(icon: string) {
         <rect x="3" y="7" width="18" height="12" rx="2" />
         <path d="M9 7V5h6v2" />
         <path d="M3 12h18" />
+      </svg>
+    );
+  }
+
+  if (icon === 'chart') {
+    return (
+      <svg {...baseProps}>
+        <path d="M4 19h16" />
+        <rect x="6" y="11" width="3" height="6" rx="1" />
+        <rect x="11" y="8" width="3" height="9" rx="1" />
+        <rect x="16" y="5" width="3" height="12" rx="1" />
       </svg>
     );
   }
