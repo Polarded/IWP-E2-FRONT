@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { searchApi, tripsApi, type Trip, type TripStatus } from '@/lib/api';
 import { useSessionUser } from '@/lib/useSessionUser';
@@ -22,6 +22,8 @@ const statusBadge: Record<string, string> = {
   FINANCE_REJECTED: 'badge-rejected',
   CORRECTION_REQUIRED: 'badge-correction',
 };
+
+const GESTOR_SEEN_PENDING_KEY = 'viajesapp_gestor_seen_pending_v1';
 
 interface FlightOption {
   airline?: string;
@@ -46,12 +48,21 @@ interface HotelOption {
   rate_per_night?: { lowest?: string };
   overall_rating?: number;
   reviews?: number;
+  link?: string;
+  booking_link?: string;
+  property_token?: string;
 }
 
 interface SearchResults {
   best_flights?: FlightOption[];
   flights?: FlightOption[];
   properties?: HotelOption[];
+}
+
+interface AirportSpec {
+  city: string;
+  country: string;
+  notes: string;
 }
 
 interface HotelAgreement {
@@ -125,6 +136,84 @@ const IATA_SUGGESTIONS: Array<{ code: string; label: string }> = [
   { code: 'GRU', label: 'Sao Paulo Guarulhos, BR' },
 ];
 
+const AIRPORT_SPECS: Record<string, AirportSpec> = {
+  MEX: { city: 'Ciudad de Mexico', country: 'MX', notes: 'AICM; considera trafico alto y tiempos de migracion.' },
+  NLU: { city: 'Zumpango', country: 'MX', notes: 'AIFA; traslado terrestre mas largo a CDMX.' },
+  TLC: { city: 'Toluca', country: 'MX', notes: 'Ideal para zona poniente; valida transporte nocturno.' },
+  MTY: { city: 'Monterrey', country: 'MX', notes: 'Terminal principal para negocios en Nuevo Leon.' },
+  GDL: { city: 'Guadalajara', country: 'MX', notes: 'Conectividad alta; valida terminal en vuelos regionales.' },
+  JFK: { city: 'New York', country: 'US', notes: 'Llegadas internacionales; revisa tiempos de aduana.' },
+  LAX: { city: 'Los Angeles', country: 'US', notes: 'Aeropuerto grande; prioriza traslados con tiempo.' },
+  MAD: { city: 'Madrid', country: 'ES', notes: 'Barajas; terminales separadas, revisa puerta de conexion.' },
+  LHR: { city: 'London', country: 'UK', notes: 'Heathrow; alto flujo internacional.' },
+  CDG: { city: 'Paris', country: 'FR', notes: 'Charles de Gaulle; contempla tiempo para conexiones.' },
+};
+
+const getAirportSpec = (code?: string, name?: string): AirportSpec => {
+  if (code && AIRPORT_SPECS[code]) {
+    return AIRPORT_SPECS[code];
+  }
+
+  return {
+    city: name?.split(',')[0]?.trim() || 'Ciudad por confirmar',
+    country: 'N/A',
+    notes: 'Valida terminal, transporte y requisitos locales al llegar.'
+  };
+};
+
+const getAirlineBookingUrl = (
+  flight: FlightOption,
+  airline: string | undefined,
+  fromId: string,
+  toId: string,
+  outboundDate: string,
+  returnDate?: string
+): string => {
+  const directLink =
+    (flight as { booking_link?: string; deep_link?: string; link?: string }).booking_link ??
+    (flight as { booking_link?: string; deep_link?: string; link?: string }).deep_link ??
+    (flight as { booking_link?: string; deep_link?: string; link?: string }).link;
+
+  if (directLink && /^https?:\/\//i.test(directLink)) {
+    return directLink;
+  }
+
+  const resolver = new URL('/api/search/flights/book', window.location.origin);
+  resolver.searchParams.set('departure_id', fromId);
+  resolver.searchParams.set('arrival_id', toId);
+  resolver.searchParams.set('outbound_date', outboundDate);
+  if (returnDate) resolver.searchParams.set('return_date', returnDate);
+  if (flight.departure_token) resolver.searchParams.set('departure_token', flight.departure_token);
+  if (airline) resolver.searchParams.set('airline', airline);
+
+  return resolver.toString();
+};
+
+const getHotelBookingUrl = (
+  hotel: HotelOption,
+  query: string,
+  checkInDate: string,
+  checkOutDate: string
+): string => {
+  const directLink =
+    (hotel as { booking_link?: string; link?: string; property_link?: string }).booking_link ??
+    (hotel as { booking_link?: string; link?: string; property_link?: string }).link ??
+    (hotel as { booking_link?: string; link?: string; property_link?: string }).property_link;
+
+  if (directLink && /^https?:\/\//i.test(directLink)) {
+    return directLink;
+  }
+
+  const googleHotels = new URL('https://www.google.com/travel/hotels');
+  googleHotels.searchParams.set('hl', 'es');
+  googleHotels.searchParams.set('gl', 'mx');
+  googleHotels.searchParams.set('curr', 'MXN');
+  googleHotels.searchParams.set('q', hotel.name ?? query);
+  if (checkInDate) googleHotels.searchParams.set('checkin', checkInDate);
+  if (checkOutDate) googleHotels.searchParams.set('checkout', checkOutDate);
+  return googleHotels.toString();
+};
+
 function StatusModal({
   trip,
   role,
@@ -143,8 +232,10 @@ function StatusModal({
 
   const [searchType, setSearchType] = useState<'flights' | 'hotels'>('flights');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [openingPurchaseKey, setOpeningPurchaseKey] = useState<string | null>(null);
   const [searchError, setSearchError] = useState('');
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [flightVisibleCount, setFlightVisibleCount] = useState(8);
   const [showSearchPanel, setShowSearchPanel] = useState(() => role === 'GESTOR');
 
   const [flightParams, setFlightParams] = useState({
@@ -220,10 +311,30 @@ function StatusModal({
           ? await searchApi.flights(params as Record<string, string>)
           : await searchApi.hotels(params as Record<string, string>);
       setResults((res.data ?? null) as SearchResults | null);
+      setFlightVisibleCount(8);
     } catch (e: unknown) {
       setSearchError(e instanceof Error ? e.message : 'Error al buscar');
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  const handleOpenPurchase = async (resolverUrl: string, key: string) => {
+    setOpeningPurchaseKey(key);
+    try {
+      const response = await fetch(resolverUrl, { cache: 'no-store' });
+      const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+      const finalUrl = payload?.url;
+
+      if (!response.ok || !finalUrl) {
+        throw new Error(payload?.error ?? 'No se pudo resolver la compra del vuelo');
+      }
+
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : 'No se pudo abrir la compra del vuelo');
+    } finally {
+      setOpeningPurchaseKey(null);
     }
   };
 
@@ -299,6 +410,7 @@ function StatusModal({
   const selectedHotelDiscount = selection?.hotel?.agreementDiscountPct ?? 0;
   const selectedHotelNetPrice = selectedHotelPrice * (1 - selectedHotelDiscount / 100);
   const selectedTotalPrice = selectedFlightPrice + selectedHotelNetPrice;
+  const tripTypeLabel = flightParams.return_date ? 'Viaje redondo' : 'Solo ida';
 
   return (
     <div className="modal-backdrop">
@@ -311,6 +423,20 @@ function StatusModal({
         <div className="p-5">
           <h3 className="text-base font-semibold mb-1" style={{ color: '#143b75' }}>Actualizar estado</h3>
           <p className="text-xs mb-4" style={{ color: '#6282ad' }}>Viaje: <strong style={{ color: '#1f5da8' }}>{trip.destination}</strong></p>
+
+          {role === 'GESTOR' && (
+            <div className="card p-4 mb-4" style={{ background: '#fffdf6', border: '1px solid #f2dfb0' }}>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#7b5a12' }}>
+                Comentarios del usuario
+              </p>
+              <p
+                className="text-sm mt-2 whitespace-pre-line"
+                style={{ color: '#5f4b1f' }}
+              >
+                {trip.reason || 'Sin comentarios del usuario.'}
+              </p>
+            </div>
+          )}
 
           {(role === 'GESTOR' || role === 'FINANZAS') && (
             <div className="card p-4 mb-4" style={{ background: '#f5f9ff', border: '1px solid #d8e6fb' }}>
@@ -351,10 +477,20 @@ function StatusModal({
                 <div className="p-3 rounded-md" style={{ background: '#ffffff', border: '1px solid #d8e6fb' }}>
                   <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#35537b' }}>Vuelo seleccionado</p>
                   {selection?.flight ? (
-                    <p className="text-sm mt-1" style={{ color: '#143b75' }}>
-                      {selection.flight.from ?? '—'} → {selection.flight.to ?? '—'}
-                      {selection.flight.price !== undefined ? ` · ${formatPriceMXN(selection.flight.price)}` : ''}
-                    </p>
+                    <div>
+                      <p className="text-sm mt-1" style={{ color: '#143b75' }}>
+                        {selection.flight.from ?? '—'} → {selection.flight.to ?? '—'}
+                        {selection.flight.price !== undefined ? ` · ${formatPriceMXN(selection.flight.price)}` : ''}
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: '#6282ad' }}>
+                        {selection.flight.tripType === 'ROUND_TRIP' ? 'Viaje redondo' : 'Solo ida'}
+                      </p>
+                      {selection.flight.bookingUrl && (
+                        <a href={selection.flight.bookingUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold" style={{ color: '#2a78ce' }}>
+                          Comprar en app/web de aerolínea
+                        </a>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-xs mt-1" style={{ color: '#6282ad' }}>Aún no has seleccionado un vuelo.</p>
                   )}
@@ -396,7 +532,7 @@ function StatusModal({
                     {(['flights', 'hotels'] as const).map(t => (
                       <button
                         key={t}
-                        onClick={() => { setSearchType(t); setResults(null); setSearchError(''); }}
+                        onClick={() => { setSearchType(t); setResults(null); setSearchError(''); setFlightVisibleCount(8); }}
                         className={`tab-button ${searchType === t ? 'active' : ''}`}
                         type="button"
                       >
@@ -542,9 +678,38 @@ function StatusModal({
 
                   {searchType === 'flights' && Array.isArray(displayFlights) && displayFlights.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      {displayFlights.slice(0, 8).map((flight, i: number) => (
+                      {role === 'GESTOR' && (
+                        <div className="flex items-center justify-between p-2 rounded-md" style={{ background: '#eef5ff', border: '1px solid #d8e6fb' }}>
+                          <p className="text-xs" style={{ color: '#35537b' }}>
+                            Mostrando {Math.min(flightVisibleCount, displayFlights.length)} de {displayFlights.length} vuelos
+                          </p>
+                          <button
+                            type="button"
+                            className="btn-outline px-3 py-1 text-xs"
+                            disabled={flightVisibleCount >= displayFlights.length}
+                            onClick={() => setFlightVisibleCount(current => current + 8)}
+                            style={flightVisibleCount >= displayFlights.length ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+                          >
+                            {flightVisibleCount < displayFlights.length
+                              ? `Ver más opciones (${displayFlights.length - flightVisibleCount} restantes)`
+                              : 'No hay más opciones'}
+                          </button>
+                        </div>
+                      )}
+
+                      {displayFlights.slice(0, flightVisibleCount).map((flight, i: number) => (
                         (() => {
                           const normalized = normalizeFlight(flight);
+                          const arrivalSpec = getAirportSpec(normalized.toId, normalized.toName);
+                          const cardKey = `${normalized.fromId}-${normalized.toId}-${normalized.airline ?? 'airline'}-${i}`;
+                          const bookingUrl = getAirlineBookingUrl(
+                            flight,
+                            normalized.airline,
+                            normalized.fromId,
+                            normalized.toId,
+                            flightParams.outbound_date,
+                            flightParams.return_date || undefined
+                          );
                           return (
                     <div key={i} className="card p-3 flex items-center justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1">
@@ -582,44 +747,81 @@ function StatusModal({
                           <p className="text-sm font-semibold" style={{ color: '#143b75' }}>
                             {normalized.fromId} → {normalized.toId}
                           </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#e8f2ff', color: '#1f5da8' }}>
+                              {tripTypeLabel}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#eef7f0', color: '#2d7f3b' }}>
+                              Llegada: {arrivalSpec.city}
+                            </span>
+                          </div>
                           <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>
                             {normalized.fromName} → {normalized.toName}
                           </p>
                           <p className="text-xs mt-0.5" style={{ color: '#35537b' }}>
                             {normalized.airline || 'Aerolínea no especificada'}
                           </p>
+                          <p className="text-xs mt-0.5" style={{ color: '#6282ad' }}>
+                            {arrivalSpec.notes}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end gap-2">
                         {normalized.price !== undefined && (
-                          <p className="text-sm font-bold" style={{ color: '#1f5da8' }}>{formatPriceMXN(normalized.price)}</p>
+                          <p className="text-sm font-bold" style={{ color: '#1f5da8' }}>
+                            MXN {formatPriceMXN(normalized.price).replace('$', '').trim()}
+                          </p>
                         )}
-                        <button
-                          type="button"
-                          className="btn-outline px-3 py-1 text-xs"
-                          onClick={() => {
-                            const next = saveTripSelection(trip.id, {
-                              flight: {
-                                airline: normalized.airline,
-                                from: normalized.fromId === '—' ? undefined : normalized.fromId,
-                                to: normalized.toId === '—' ? undefined : normalized.toId,
-                                price: normalized.price,
-                                departure_token: normalized.departureToken,
-                              },
-                            });
-                            setSelection(next);
-                            setSearchType('hotels');
-                            setResults(null);
-                            setSearchError('');
-                          }}
-                        >
-                          Seleccionar
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPurchase(bookingUrl, cardKey)}
+                            className="btn-ghost px-3 py-1 text-xs"
+                          >
+                            {openingPurchaseKey === cardKey ? 'Abriendo...' : 'Comprar vuelo (MXN)'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline px-3 py-1 text-xs"
+                            onClick={() => {
+                              const next = saveTripSelection(trip.id, {
+                                flight: {
+                                  airline: normalized.airline,
+                                  from: normalized.fromId === '—' ? undefined : normalized.fromId,
+                                  to: normalized.toId === '—' ? undefined : normalized.toId,
+                                  price: normalized.price,
+                                  departure_token: normalized.departureToken,
+                                  tripType: flightParams.return_date ? 'ROUND_TRIP' : 'ONE_WAY',
+                                  bookingUrl,
+                                  arrivalAirportName: normalized.toName,
+                                },
+                              });
+                              setSelection(next);
+                              setSearchType('hotels');
+                              setResults(null);
+                              setSearchError('');
+                            }}
+                          >
+                            Seleccionar
+                          </button>
+                        </div>
                       </div>
                     </div>
                           );
                         })()
                       ))}
+
+                      {role !== 'GESTOR' && flightVisibleCount < displayFlights.length && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            className="btn-outline px-4 py-2 text-xs"
+                            onClick={() => setFlightVisibleCount(current => current + 8)}
+                          >
+                            Ver más opciones de vuelo ({displayFlights.length - flightVisibleCount} restantes)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -628,6 +830,13 @@ function StatusModal({
                       {displayHotels.slice(0, 8).map((hotel, i: number) => (
                         (() => {
                           const agreement = resolveHotelAgreement(hotel.name);
+                          const hotelBookingUrl = getHotelBookingUrl(
+                            hotel,
+                            hotelParams.q,
+                            hotelParams.check_in_date,
+                            hotelParams.check_out_date
+                          );
+                          const hotelCardKey = `hotel-${hotel.name ?? 'hotel'}-${i}`;
                           return (
                         <div key={i} className="card p-3">
                       <p className="text-sm font-semibold" style={{ color: '#143b75' }}>{hotel.name ?? 'Hotel'}</p>
@@ -644,36 +853,45 @@ function StatusModal({
                       )}
                       {hotel.total_rate?.lowest && (
                         <p className="text-sm font-bold mt-2" style={{ color: '#1f5da8' }}>
-                          {hotel.total_rate.lowest}
+                          MXN {hotel.total_rate.lowest.replace('$', '').trim()}
                         </p>
                       )}
-                      <button
-                        type="button"
-                        className="btn-outline px-3 py-1 text-xs mt-3 w-full"
-                        onClick={() => {
-                          const next = saveTripSelection(trip.id, {
-                            hotel: {
-                              name: hotel.name,
-                              type: hotel.type,
-                              total_rate: hotel.total_rate?.lowest,
-                              rate_per_night: hotel.rate_per_night?.lowest,
-                              overall_rating: hotel.overall_rating,
-                              reviews: hotel.reviews,
-                              hasAgreement: Boolean(agreement),
-                              agreementName: agreement?.name,
-                              agreementCode: agreement?.code,
-                              agreementDiscountPct: agreement?.discountPct,
-                            },
-                          });
-                          setSelection(next);
-                          setSearchType('flights');
-                          setResults(null);
-                          setSearchError('');
-                          setShowSearchPanel(false);
-                        }}
-                      >
-                        Seleccionar hospedaje
-                      </button>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          type="button"
+                          className="btn-ghost px-3 py-1 text-xs flex-1"
+                          onClick={() => handleOpenPurchase(hotelBookingUrl, hotelCardKey)}
+                        >
+                          {openingPurchaseKey === hotelCardKey ? 'Abriendo...' : 'Comprar hospedaje (MXN)'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-outline px-3 py-1 text-xs flex-1"
+                          onClick={() => {
+                            const next = saveTripSelection(trip.id, {
+                              hotel: {
+                                name: hotel.name,
+                                type: hotel.type,
+                                total_rate: hotel.total_rate?.lowest,
+                                rate_per_night: hotel.rate_per_night?.lowest,
+                                overall_rating: hotel.overall_rating,
+                                reviews: hotel.reviews,
+                                hasAgreement: Boolean(agreement),
+                                agreementName: agreement?.name,
+                                agreementCode: agreement?.code,
+                                agreementDiscountPct: agreement?.discountPct,
+                              },
+                            });
+                            setSelection(next);
+                            setSearchType('flights');
+                            setResults(null);
+                            setSearchError('');
+                            setShowSearchPanel(false);
+                          }}
+                        >
+                          Seleccionar hospedaje
+                        </button>
+                      </div>
                         </div>
                           );
                         })()
@@ -733,6 +951,7 @@ export default function TripsPage() {
   const { user } = useSessionUser();
   const role = user?.role ?? 'USER';
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [seenPendingIds, setSeenPendingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Trip | null>(null);
@@ -752,6 +971,21 @@ export default function TripsPage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (role !== 'GESTOR') return;
+    try {
+      const raw = localStorage.getItem(GESTOR_SEEN_PENDING_KEY);
+      if (!raw) {
+        setSeenPendingIds([]);
+        return;
+      }
+      const parsed = JSON.parse(raw) as string[];
+      setSeenPendingIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setSeenPendingIds([]);
+    }
+  }, [role]);
 
   const canApprove = role === 'GESTOR' || role === 'FINANZAS';
   const pendingByRole: Record<string, TripStatus[]> = {
@@ -775,6 +1009,20 @@ export default function TripsPage() {
     if (filter === 'ACCEPTED') return (acceptedByRole[role] ?? acceptedByRole.USER).includes(t.status);
     return (rejectedByRole[role] ?? rejectedByRole.USER).includes(t.status);
   });
+
+  const unseenPendingTripsForGestor = useMemo(() => {
+    if (role !== 'GESTOR') return [];
+    return trips.filter(
+      trip => trip.status === 'PENDING' && !seenPendingIds.includes(trip.id)
+    );
+  }, [role, trips, seenPendingIds]);
+
+  const markPendingAsSeen = () => {
+    const pendingIds = trips.filter(trip => trip.status === 'PENDING').map(trip => trip.id);
+    const merged = Array.from(new Set([...seenPendingIds, ...pendingIds]));
+    setSeenPendingIds(merged);
+    localStorage.setItem(GESTOR_SEEN_PENDING_KEY, JSON.stringify(merged));
+  };
 
   return (
     <div className="max-w-6xl">
@@ -810,6 +1058,28 @@ export default function TripsPage() {
               </Link>
             )}
           </div>
+
+          {role === 'GESTOR' && unseenPendingTripsForGestor.length > 0 && (
+            <div className="card p-4 mb-5" style={{ background: '#fff7e8', border: '1px solid #f2dfb0' }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#7b5a12' }}>
+                    Notificación interna
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: '#5f4b1f' }}>
+                    Tienes {unseenPendingTripsForGestor.length} solicitud{unseenPendingTripsForGestor.length === 1 ? '' : 'es'} nueva{unseenPendingTripsForGestor.length === 1 ? '' : 's'} pendiente{unseenPendingTripsForGestor.length === 1 ? '' : 's'} de revisar.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={markPendingAsSeen}
+                  className="btn-outline px-3 py-1 text-xs"
+                >
+                  Marcar como vistas
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-sm" style={{ color: '#6282ad' }}>Cargando...</div>

@@ -15,6 +15,11 @@ interface MonthFinance {
   trips: number;
 }
 
+interface DestinationFrequency {
+  destination: string;
+  count: number;
+}
+
 const parseCurrencyValue = (raw?: string): number => {
   if (!raw) return 0;
   const normalized = raw.replace(/[^\d.,-]/g, '').trim();
@@ -152,6 +157,22 @@ export default function FinanzasReportPage() {
     extras: totals.total > 0 ? (totals.extras / totals.total) * 100 : 0,
   };
 
+  const topDestinations = useMemo<DestinationFrequency[]>(() => {
+    const map = new Map<string, number>();
+    for (const trip of trips) {
+      const normalized = (trip.destination ?? '').trim();
+      if (!normalized) continue;
+      map.set(normalized, (map.get(normalized) ?? 0) + 1);
+    }
+
+    return [...map.entries()]
+      .map(([destination, count]) => ({ destination, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [trips]);
+
+  const maxDestinationCount = Math.max(1, ...topDestinations.map(item => item.count));
+
   if (user?.role !== 'FINANZAS') {
     return (
       <div className="max-w-5xl">
@@ -209,9 +230,15 @@ export default function FinanzasReportPage() {
                 </div>
               </div>
 
-              <div className="card p-4 mb-6">
+              <div
+                className="card p-4 mb-6"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgba(245,249,255,1) 0%, rgba(255,255,255,1) 70%), repeating-linear-gradient(45deg, rgba(42,120,206,0.05) 0px, rgba(42,120,206,0.05) 8px, rgba(42,120,206,0.02) 8px, rgba(42,120,206,0.02) 16px)',
+                }}
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold" style={{ color: '#143b75' }}>Grafica mensual (total por mes)</h2>
+                  <h2 className="text-sm font-semibold" style={{ color: '#143b75' }}>Grafica mensual (stacked por categoría)</h2>
                   <p className="text-xs" style={{ color: '#6282ad' }}>{totals.trips} viajes</p>
                 </div>
                 <div className="space-y-3">
@@ -221,17 +248,43 @@ export default function FinanzasReportPage() {
                         <span>{monthLabel(month.monthKey)}</span>
                         <span>{formatCurrency(month.total)}</span>
                       </div>
-                      <div className="h-3 rounded-full overflow-hidden" style={{ background: '#e7eefb' }}>
+                      <div className="h-4 rounded-full overflow-hidden" style={{ background: '#e7eefb' }}>
                         <div
-                          className="h-full"
+                          className="h-full flex"
                           style={{
                             width: `${Math.max(6, (month.total / maxMonthTotal) * 100)}%`,
-                            background: 'linear-gradient(90deg, #2a78ce 0%, #1f5da8 100%)',
                           }}
-                        />
+                        >
+                          <div
+                            style={{
+                              width: `${month.total > 0 ? (month.flight / month.total) * 100 : 0}%`,
+                              background: '#1f5da8'
+                            }}
+                            title={`Vuelos: ${formatCurrency(month.flight)}`}
+                          />
+                          <div
+                            style={{
+                              width: `${month.total > 0 ? (month.hotel / month.total) * 100 : 0}%`,
+                              background: '#2a78ce'
+                            }}
+                            title={`Hoteles: ${formatCurrency(month.hotel)}`}
+                          />
+                          <div
+                            style={{
+                              width: `${month.total > 0 ? (month.extras / month.total) * 100 : 0}%`,
+                              background: '#7baee8'
+                            }}
+                            title={`Extras: ${formatCurrency(month.extras)}`}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
+                </div>
+                <div className="flex items-center gap-3 mt-3 text-[11px]" style={{ color: '#35537b' }}>
+                  <span className="inline-flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: 999, background: '#1f5da8', display: 'inline-block' }} />Vuelos</span>
+                  <span className="inline-flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: 999, background: '#2a78ce', display: 'inline-block' }} />Hoteles</span>
+                  <span className="inline-flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: 999, background: '#7baee8', display: 'inline-block' }} />Extras</span>
                 </div>
               </div>
 
@@ -271,6 +324,33 @@ export default function FinanzasReportPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              <div className="card p-4 mt-4">
+                <h2 className="text-sm font-semibold mb-3" style={{ color: '#143b75' }}>Destinos más frecuentes</h2>
+                {topDestinations.length === 0 ? (
+                  <p className="text-xs" style={{ color: '#6282ad' }}>Aún no hay viajes para calcular frecuencia.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {topDestinations.map((item, index) => (
+                      <div key={item.destination}>
+                        <div className="flex justify-between text-xs mb-1" style={{ color: '#35537b' }}>
+                          <span>{index + 1}. {item.destination}</span>
+                          <span>{item.count} viaje{item.count === 1 ? '' : 's'}</span>
+                        </div>
+                        <div className="h-2.5 rounded-full overflow-hidden" style={{ background: '#e7eefb' }}>
+                          <div
+                            className="h-full"
+                            style={{
+                              width: `${Math.max(8, (item.count / maxDestinationCount) * 100)}%`,
+                              background: 'linear-gradient(90deg, #f2a531 0%, #de8c12 100%)'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -4,6 +4,9 @@ export interface SelectedFlight {
   to?: string;
   price?: number;
   departure_token?: string;
+  tripType?: 'ONE_WAY' | 'ROUND_TRIP';
+  bookingUrl?: string;
+  arrivalAirportName?: string;
 }
 
 export interface SelectedHotel {

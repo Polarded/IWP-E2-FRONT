@@ -9,6 +9,7 @@ export default function NewTripPage() {
   const [form, setForm] = useState({
     destination: '',
     reason: '',
+    preferencesComment: '',
     startDate: '',
     endDate: '',
   });
@@ -80,6 +81,19 @@ export default function NewTripPage() {
                   className="input-field"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#35537b' }}>
+                Preferencias del viaje (opcional)
+              </label>
+              <textarea
+                value={form.preferencesComment}
+                onChange={set('preferencesComment')}
+                placeholder="Ej: prefiero vuelo por la mañana, asiento de pasillo, hotel cerca del cliente..."
+                rows={3}
+                className="input-field resize-none"
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -106,7 +106,7 @@ export interface Trip {
 export const tripsApi = {
   list: () =>
     request<{ ok: boolean; data: Trip[] }>('/trips'),
-  create: (payload: { destination: string; reason: string; startDate: string; endDate: string }) =>
+  create: (payload: { destination: string; reason: string; startDate: string; endDate: string; preferencesComment?: string }) =>
     request<{ ok: boolean; data: Trip }>('/trips', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -126,13 +126,14 @@ export interface Expense {
   tripId: string;
   description: string;
   amount: number;
+  ticketImageUrl?: string;
   createdAt: string;
 }
 
 export const expensesApi = {
   list: (tripId: string) =>
     request<{ ok: boolean; data: Expense[] }>(`/trips/${tripId}/expenses`),
-  create: (tripId: string, payload: { description: string; amount: number }) =>
+  create: (tripId: string, payload: { description: string; amount: number; ticketImageUrl?: string }) =>
     request<{ ok: boolean; data: Expense }>(`/trips/${tripId}/expenses`, {
       method: 'POST',
       body: JSON.stringify(payload),

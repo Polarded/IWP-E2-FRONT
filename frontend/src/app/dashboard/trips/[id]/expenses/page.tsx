@@ -6,6 +6,14 @@ import { expensesApi, tripsApi, type Expense, type Trip } from '@/lib/api';
 import { useSessionUser } from '@/lib/useSessionUser';
 import { getTripSelection } from '@/lib/tripSelection';
 
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen del ticket'));
+    reader.readAsDataURL(file);
+  });
+
 const parseCurrencyValue = (raw?: string): number => {
   if (!raw) return 0;
   const normalized = raw.replace(/[^\d.,-]/g, '').trim();
@@ -59,6 +67,8 @@ export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
+  const [ticketFile, setTicketFile] = useState<File | null>(null);
+  const [previewTicketUrl, setPreviewTicketUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -95,9 +105,15 @@ export default function ExpensesPage() {
     }
     setSaving(true);
     try {
-      await expensesApi.create(tripId, { description: desc, amount: parsed });
+      let ticketImageUrl: string | undefined;
+      if (ticketFile) {
+        ticketImageUrl = await readFileAsDataUrl(ticketFile);
+      }
+
+      await expensesApi.create(tripId, { description: desc, amount: parsed, ticketImageUrl });
       setDesc('');
       setAmount('');
+      setTicketFile(null);
       setShowForm(false);
       await loadExpenses();
     } catch (err: unknown) {
@@ -200,7 +216,7 @@ export default function ExpensesPage() {
                           </div>
                           <div>
                             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#35537b' }}>
-                              Monto (USD) *
+                              Monto (MXN) *
                             </label>
                             <input
                               type="number"
@@ -212,6 +228,20 @@ export default function ExpensesPage() {
                               required
                               className="input-field"
                             />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#35537b' }}>
+                              Foto del ticket (opcional)
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={e => setTicketFile(e.target.files?.[0] ?? null)}
+                              className="input-field"
+                            />
+                            <p className="text-xs mt-1" style={{ color: '#6282ad' }}>
+                              Se guarda como evidencia para finanzas.
+                            </p>
                           </div>
                         </div>
 
@@ -260,7 +290,7 @@ export default function ExpensesPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        {['Descripcion', 'Monto', 'Fecha'].map(h => (
+                        {['Descripcion', 'Monto (MXN)', 'Ticket', 'Fecha'].map(h => (
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
@@ -270,6 +300,26 @@ export default function ExpensesPage() {
                         <tr key={exp.id}>
                           <td style={{ color: '#143b75' }}>{exp.description}</td>
                           <td className="font-semibold" style={{ color: '#1f5da8' }}>${exp.amount.toFixed(2)}</td>
+                          <td>
+                            {exp.ticketImageUrl ? (
+                              exp.ticketImageUrl.startsWith('data:image/') ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewTicketUrl(exp.ticketImageUrl ?? null)}
+                                  className="text-xs font-semibold"
+                                  style={{ color: '#2a78ce' }}
+                                >
+                                  Ver ticket
+                                </button>
+                              ) : (
+                                <a href={exp.ticketImageUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold" style={{ color: '#2a78ce' }}>
+                                  Ver ticket
+                                </a>
+                              )
+                            ) : (
+                              <span className="text-xs" style={{ color: '#6282ad' }}>Sin imagen</span>
+                            )}
+                          </td>
                           <td style={{ color: '#6282ad', fontSize: '0.75rem' }}>
                             {new Date(exp.createdAt).toLocaleDateString('es-MX')}
                           </td>
@@ -281,6 +331,7 @@ export default function ExpensesPage() {
                         <td className="px-4 py-3 font-semibold text-xs uppercase" style={{ color: '#35537b' }}>Gastos adicionales</td>
                         <td className="px-4 py-3 font-bold" style={{ color: '#1f5da8' }}>${total.toFixed(2)}</td>
                         <td />
+                        <td />
                       </tr>
                     </tfoot>
                   </table>
@@ -290,6 +341,26 @@ export default function ExpensesPage() {
           )}
         </div>
       </div>
+
+      {previewTicketUrl && (
+        <div className="modal-backdrop" onClick={() => setPreviewTicketUrl(null)}>
+          <div className="modal-window" onClick={e => e.stopPropagation()}>
+            <div className="window-header">
+              <p className="text-xs font-semibold" style={{ color: '#35537b' }}>PREVIEW TICKET</p>
+              <button onClick={() => setPreviewTicketUrl(null)} className="btn-ghost px-2 py-1 text-xs">X</button>
+            </div>
+            <div className="p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewTicketUrl}
+                alt="Ticket de gasto"
+                className="w-full rounded-md"
+                style={{ maxHeight: '70vh', objectFit: 'contain', background: '#f5f9ff', border: '1px solid #d8e6fb' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
