@@ -70,6 +70,64 @@ const monthLabel = (monthKey: string): string => {
   return new Intl.DateTimeFormat('es-MX', { month: 'short', year: 'numeric' }).format(date);
 };
 
+const normalizeDestinationKey = (destination: string): string => {
+  return destination
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+};
+
+const prettifyDestination = (destination: string): string => {
+  return destination
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\p{L}/gu, letter => letter.toUpperCase());
+};
+
+const levenshteinDistance = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const matrix: number[][] = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+
+  for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[a.length][b.length];
+};
+
+const findSimilarDestinationKey = (key: string, existingKeys: string[]): string | null => {
+  let bestKey: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const existing of existingKeys) {
+    const distance = levenshteinDistance(key, existing);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestKey = existing;
+    }
+  }
+
+  // Accept tiny typos only (e.g. Monterrey vs Monterrrey)
+  const dynamicThreshold = key.length >= 10 ? 2 : 1;
+  return bestDistance <= dynamicThreshold ? bestKey : null;
+};
+
 function calculateMonthData(trips: Trip[], extrasByTrip: Record<string, number>): MonthFinance[] {
   const byMonth = new Map<string, MonthFinance>();
 
@@ -158,16 +216,31 @@ export default function FinanzasReportPage() {
   };
 
   const topDestinations = useMemo<DestinationFrequency[]>(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { count: number; label: string }>();
     for (const trip of trips) {
-      const normalized = (trip.destination ?? '').trim();
-      if (!normalized) continue;
-      map.set(normalized, (map.get(normalized) ?? 0) + 1);
+      const raw = (trip.destination ?? '').trim();
+      if (!raw) continue;
+
+      const normalizedKey = normalizeDestinationKey(raw);
+      const similarKey = findSimilarDestinationKey(normalizedKey, [...map.keys()]);
+      const key = similarKey ?? normalizedKey;
+
+      const current = map.get(key);
+      if (!current) {
+        map.set(key, { count: 1, label: prettifyDestination(raw) });
+      } else {
+        current.count += 1;
+        // Keep a cleaner/shorter label when variants differ by typo.
+        const candidate = prettifyDestination(raw);
+        if (candidate.length < current.label.length) {
+          current.label = candidate;
+        }
+      }
     }
 
     return [...map.entries()]
-      .map(([destination, count]) => ({ destination, count }))
-      .sort((a, b) => b.count - a.count)
+      .map(([, value]) => ({ destination: value.label, count: value.count }))
+      .sort((a, b) => b.count - a.count || a.destination.localeCompare(b.destination))
       .slice(0, 6);
   }, [trips]);
 

@@ -322,6 +322,15 @@ function StatusModal({
   const handleOpenPurchase = async (resolverUrl: string, key: string) => {
     setOpeningPurchaseKey(key);
     try {
+      const parsed = new URL(resolverUrl, window.location.origin);
+      const isInternalFlightResolver =
+        parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/search/flights/book');
+
+      if (!isInternalFlightResolver) {
+        window.open(parsed.toString(), '_blank', 'noopener,noreferrer');
+        return;
+      }
+
       const response = await fetch(resolverUrl, { cache: 'no-store' });
       const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
       const finalUrl = payload?.url;
